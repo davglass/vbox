@@ -1,0 +1,81 @@
+#!/bin/bash
+
+name=$1
+os=$2
+image=$3
+
+name=${name/ /}
+os=${os/ /}
+
+if [ "$name" == "help" -o "$name" == "" ]; then
+	echo "VBoxCreate"
+	exit
+fi
+
+if [ "$name" = "" ]; then
+	echo "Must provide an image name"
+	exit
+fi
+
+if [ "$os" = "" ]; then
+	os="WindowsXP"
+fi
+
+if [ "$image" = "" ]; then
+	image="winxp"
+fi
+
+image=${image%.iso}
+
+for dir in /machines/disks /machines/images /machines/os; do
+	if [ ! -d $dir ]; then
+		echo "Making: $dir"
+		mkdir -p $dir
+	fi
+done
+
+if [ ! -f "/machines/images/${image}.iso" ]; then
+	echo "Could not locate '/machines/images/${image}.iso'"
+	exit
+fi
+
+echo "This will create the VM with the following options:"
+echo "	OS stored: /machines/os/${name}/${name}.vbox"
+echo "	Drive stored: /machines/disks/${name}.vdi"
+echo "	Mounting ISO: /machines/images/${image}.iso"
+
+echo "Are you sure you want to continue? [y/N]"
+read agree
+
+case $agree in
+	y|Y|YES|yes|Yes) ;;
+	n|N|no|NO|No)
+		echo "Aborting"
+		exit 1
+	;;
+	*) echo "Please enter only y or n" && exit 1
+esac
+
+echo ""
+echo "Creating VM '${name}' with os '$os' using image '${image}.iso'"
+
+if [ ! -f /machines/disks/$name.vdi ]; then
+	echo "Creating Virtual Hard Disk"
+	VBoxManage createhd --filename /machines/disks/${name}.vdi --size 20480 --variant Standard
+	wait
+fi
+VBoxManage createvm --name $name --ostype "$os" --register  --basefolder /machines/os
+wait
+VBoxManage storagectl $name --name "IDE Controller" --add ide
+wait
+VBoxManage storagectl $name --name "Floppy Controller" --add floppy
+wait
+VBoxManage storageattach $name --storagectl "IDE Controller" --port 1 --device 0 --type dvddrive --medium "/machines/images/${image}.iso"
+wait
+VBoxManage storageattach $name --storagectl "IDE Controller" --port 0 --device 0 --type hdd --medium /machines/disks/$name.vdi
+wait
+VBoxManage modifyvm $name --memory 1024 --nic1 bridged --bridgeadapter1 eth0 --boot1 dvd --boot2 disk --boot3 none --boot4 none --vrde on --vrdeauthtype null
+wait
+echo "Setup remote port with this command:"
+echo "	VBoxManage modifyvm $name --vrdeport 400x"
+echo "Image Created"

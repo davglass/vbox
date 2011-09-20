@@ -1,0 +1,120 @@
+#!/bin/bash
+
+action=$1
+name=$2
+
+running=(`VBoxManage list --long runningvms | grep Name: | awk '{ print $2 ; }' | sort | tr '\n' ' '`)
+allvms=(`VBoxManage list --long vms  2>&1 | grep Name: | grep -v "inaccessible" | awk '{ print $2;}' | sort | tr '\n' ' '`)
+
+case $action in
+	list|ls)
+		echo "Registered VMs:"
+		echo "	 ${allvms[@]}"
+		exit
+	;;
+	running)
+		echo "Running VMs:"
+		echo "	 ${running[@]}"
+		exit
+	;;
+	start)
+	;;
+	stop)
+	;;
+	*)
+		echo "VBoxControl:"
+		echo " 		list|ls - List all available VM's"
+		echo " 		running - List all running VM's"
+		echo " 		start [name] - Start this named VM"
+		echo " 		stop [name] - Stop this named VM"
+		echo " 		start all - Start all available VM's (if they are currently stopped)"
+		echo " 		stop all - Stop all available VM's (if they are currently started)"
+		exit 1
+	;;
+esac
+
+if [ "$name" == "" ]; then
+	echo "Error: Must provide a machine name (all if actions should be on all available vms)"
+	exit 1
+fi
+
+is_valid () {
+	local valid=1
+	for vm in ${allvms[@]}; do
+		#echo "Checking $name against ${vm}"
+		if [ "${vm}" == "$name" ]; then
+			valid=0
+		fi
+	done
+	return $valid
+}
+
+is_running () {
+	local runs=1
+	local name=$1
+	for vm in ${running[@]}; do
+		#echo "Checking $name against ${vm}"
+		if [ "${vm}" == "$name" ]; then
+			runs=0
+		fi
+	done
+	return $runs
+}
+
+startvm () {
+	local name=$1
+	echo ""
+	if ! is_running $name; then
+		echo -n "	Starting $name"
+		VBoxHeadless --startvm $name > /dev/null 2>&1 &
+		pid=$!
+		echo " with PID $pid"
+	else
+		echo "	Did not start $name, it appears to be running already."
+	fi
+}
+
+stopvm () {
+	local name=$1
+	echo ""
+	if is_running $name; then
+		echo "	Stopping $name"
+		VBoxManage controlvm $name poweroff
+	else
+		echo "	Did not stop $name, it appears to be stopped already."
+	fi
+}
+
+if [ "$name" != "all" ]; then
+	if ! is_valid; then
+		echo ""
+		echo "	Image name not found: $name"
+		exit 1
+	fi
+	if is_running $name; then
+		if [ "$action" == "start" ]; then
+			echo "	$name is already running!"
+		else
+			stopvm $name
+		fi
+	else
+		if [ "$action" == "start" ]; then
+			startvm $name
+		else
+			echo "	$name is already stopped!"
+		fi
+	fi
+else
+	if [ "$action" == "start" ]; then
+		echo "Starting all vms.."
+		for vm in ${allvms[@]}; do
+			startvm ${vm}
+		done
+	else
+		echo "Stopping all vms.."
+		for vm in ${allvms[@]}; do
+			stopvm ${vm}
+		done
+	fi
+fi
+

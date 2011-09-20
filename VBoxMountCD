@@ -1,0 +1,22 @@
+#!/bin/bash
+
+NAME=$1
+IMAGE=$2
+
+if [ "$NAME" == "" ]; then
+	echo "Please provide a machine name"
+	exit
+fi
+
+if [ -f /machines/images/$IMAGE ]; then
+	IMAGE=/machines/images/$IMAGE
+fi
+
+if [ ! -f $IMAGE ]; then
+	echo "Please provide a path to the image file to mount"
+	exit
+fi
+
+
+VBoxManage storageattach $NAME --storagectl "IDE Controller" --port 1 --device 0 --medium $IMAGE --type dvddrive
+
